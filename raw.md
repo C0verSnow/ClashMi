@@ -2,7 +2,7 @@
 
 复制下面代码块中的完整 JavaScript，替换原脚本后重新加载配置。
 
-脚本会过滤 REALITY short-id 格式错误的节点；策略组因此变空时会回退到 DIRECT（直连）。Tailscale 的 `auth-key` 当前为占位符，使用时请替换为你的有效密钥。
+脚本会过滤 `config.proxies` 中 REALITY short-id 格式错误（包括末尾换行）的节点；只有显式节点来源的策略组因此变空时会回退到 DIRECT（直连），有 provider 或 include-all 来源的组保留原来源。Tailscale 的 `auth-key` 当前为占位符，使用时请替换为你的有效密钥。provider 内容和直接引用坏节点的规则需另行修正，详见 [README](README.md)。
 
 ```javascript
 function main(config) {
@@ -18,8 +18,10 @@ function main(config) {
     var reality = proxy["reality-opts"];
     var shortId = reality && reality["short-id"];
     // 缺省字段使用内核默认值；显式数值不能转成字符串，以免丢失前导零。
+    // 不用 $ 判断结尾：JavaScript 的 $ 会放过末尾换行，内核却会拒绝。
     var invalid = reality && shortId !== undefined &&
-      (typeof shortId !== "string" || !/^(?:[0-9a-fA-F]{2}){0,8}$/.test(shortId));
+      (typeof shortId !== "string" || shortId.length > 16 ||
+       shortId.length % 2 !== 0 || /[^0-9a-fA-F]/.test(shortId));
 
     if (invalid) {
       removedNames.push(proxy.name);
@@ -41,7 +43,11 @@ function main(config) {
       }
     }
     if (filtered.length !== members.length) {
-      groups[g].proxies = filtered.length ? filtered : ["DIRECT"];
+      // 仍有 provider 或 include-all 来源的组不强行添加 DIRECT。
+      var hasOtherSources = (Array.isArray(groups[g].use) && groups[g].use.length > 0) ||
+        groups[g]["include-all"] === true || groups[g]["include-all-proxies"] === true ||
+        groups[g]["include-all-providers"] === true;
+      groups[g].proxies = filtered.length || hasOtherSources ? filtered : ["DIRECT"];
     }
   }
 
