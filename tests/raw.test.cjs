@@ -7,7 +7,8 @@ const source = fs.readFileSync('raw.js', 'utf8');
 function apply(config) {
   const context = vm.createContext({});
   vm.runInContext(source, context);
-  return JSON.parse(JSON.stringify(context.main(config)));
+  // main 会原地更新配置；每次用独立输入，避免修改上次输出这个比较基准。
+  return JSON.parse(JSON.stringify(context.main(JSON.parse(JSON.stringify(config)))));
 }
 function proxy(name, shortId) {
   return { name, type: 'vless', 'reality-opts': { 'short-id': shortId } };
