@@ -1,1 +1,35 @@
+name: Script regression
 
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JavaScript regression and documentation consistency
+        run: node --test tests/raw.test.cjs
+      - name: Download official prebuilt Mihomo
+        env:
+          MIHOMO_VERSION: v1.19.32
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-v1-${MIHOMO_VERSION}.gz" \
+            -o "$RUNNER_TEMP/mihomo.gz"
+          gzip -d "$RUNNER_TEMP/mihomo.gz"
+          chmod +x "$RUNNER_TEMP/mihomo"
+      - name: Reproduce error and validate fixed configuration with Mihomo
+        env:
+          MIHOMO_BINARY: ${{ runner.temp }}/mihomo
+        run: node tests/kernel-check.cjs
